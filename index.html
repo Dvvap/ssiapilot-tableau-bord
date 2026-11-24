@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tableau de bord SSIAPilot</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --bg:#f4f6f8; --panel:#ffffff; --fg:#1b2430; --muted:#5c6b7a; --border:#dde3e9;
+    --accent:#1d6f8f; --accent-fg:#ffffff;
+    --ok-bg:#e4f5ea; --ok-fg:#1f7a43;
+    --warn-bg:#fff3e0; --warn-fg:#9a5b00;
+    --crit-bg:#fde8e8; --crit-fg:#b42318;
+    --lite-bg:#eef2ef; --lite-fg:#3c5c4c;
+    --plus-bg:#e7eef8; --plus-fg:#1d4f8f;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#121922; --panel:#1b2430; --fg:#e7edf3; --muted:#93a2b1; --border:#2a3644;
+      --accent:#4ea9cc; --accent-fg:#06202a;
+      --ok-bg:#163828; --ok-fg:#7be0a8;
+      --warn-bg:#3a2a0c; --warn-fg:#f0b352;
+      --crit-bg:#3a1414; --crit-fg:#f28b85;
+      --lite-bg:#1e2a24; --lite-fg:#a9c9b8;
+      --plus-bg:#17263b; --plus-fg:#9dc0ec;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif;padding:0 0 60px}
+  h1,h2,h3{font-family:inherit;margin:0}
+  header{background:var(--panel);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  header h1{font-size:18px}
+  .offres{display:flex;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:3px}
+  .offres button{border:none;background:transparent;padding:6px 14px;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;color:var(--muted)}
+  .offres button.actif[data-offre="plus"]{background:var(--plus-bg);color:var(--plus-fg)}
+  .offres button.actif[data-offre="lite"]{background:var(--lite-bg);color:var(--lite-fg)}
+  .spacer{flex:1}
+  .btn{border:1px solid var(--border);background:var(--panel);color:var(--fg);padding:7px 14px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer}
+  .btn:hover{border-color:var(--accent)}
+  .btn.primaire{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+  .btn.danger{color:var(--crit-fg)}
+  .btn:disabled{opacity:.5;cursor:default}
+  main{max-width:1180px;margin:0 auto;padding:24px}
+  .carte{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px}
+  .carte h2{font-size:15px;display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .compte{font-size:12px;color:var(--muted);font-weight:400}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;padding:6px 10px;border-bottom:1px solid var(--border)}
+  td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .nom{font-weight:600}
+  .muted{color:var(--muted)}
+  .badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700}
+  .badge.ok{background:var(--ok-bg);color:var(--ok-fg)}
+  .badge.warn{background:var(--warn-bg);color:var(--warn-fg)}
+  .badge.crit{background:var(--crit-bg);color:var(--crit-fg)}
+  .actions{display:flex;gap:6px;flex-wrap:wrap}
+  .actions .btn{padding:4px 9px;font-size:12px}
+  #connexion{max-width:380px;margin:80px auto;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:28px}
+  #connexion h1{font-size:19px;margin-bottom:4px}
+  #connexion p{color:var(--muted);font-size:13px;margin:0 0 18px}
+  label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:12px 0 4px}
+  input,select,textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--fg);font-size:14px;font-family:inherit}
+  textarea{resize:vertical;min-height:60px}
+  .erreur{background:var(--crit-bg);color:var(--crit-fg);padding:9px 12px;border-radius:7px;font-size:13px;margin-top:12px}
+  [hidden]{display:none!important}
+  .overlay{position:fixed;inset:0;background:rgba(10,14,20,.5);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;z-index:50}
+  .modal{background:var(--panel);border-radius:12px;padding:24px;max-width:460px;width:100%;border:1px solid var(--border)}
+  .modal h3{font-size:16px;margin-bottom:4px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+  .code-genere{font:700 20px/1 ui-monospace,monospace;letter-spacing:.06em;background:var(--ok-bg);color:var(--ok-fg);padding:12px;border-radius:8px;text-align:center;margin-top:14px}
+  .vide{color:var(--muted);text-align:center;padding:30px;font-size:13px}
+  @media (max-width:760px){ .grid2{grid-template-columns:1fr} table,thead{display:block} thead{display:none} tr{display:block;border-bottom:1px solid var(--border);padding:10px 0} td{display:flex;justify-content:space-between;gap:12px;border:none;padding:4px 0} td::before{content:attr(data-label);color:var(--muted);font-size:11px;text-transform:uppercase;font-weight:600} }
+</style>
+</head>
+<body>
+
+<div id="connexion">
+  <h1>Tableau de bord SSIAPilot</h1>
+  <p>Connecte-toi avec le compte admin configuré dans <code>tableau_de_bord.sql</code> pour ce projet.</p>
+  <label>Offre</label>
+  <div class="offres" id="offres-connexion" style="width:100%">
+    <button data-offre="plus" style="flex:1">SSIAPilot+</button>
+    <button data-offre="lite" style="flex:1">SSIAPilot Lite</button>
+  </div>
+  <label>E-mail</label>
+  <input type="email" id="champ-email" autocomplete="username">
+  <label>Mot de passe</label>
+  <input type="password" id="champ-mdp" autocomplete="current-password">
+  <button class="btn primaire" id="btn-connexion" style="width:100%;margin-top:18px">Se connecter</button>
+  <div class="erreur" id="erreur-connexion" hidden></div>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <h1>Tableau de bord SSIAPilot</h1>
+    <div class="offres" id="offres-app">
+      <button data-offre="plus">SSIAPilot+</button>
+      <button data-offre="lite">SSIAPilot Lite</button>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn" id="btn-rafraichir">Rafraîchir</button>
+    <button class="btn" id="btn-export">Exporter CSV</button>
+    <button class="btn primaire" id="btn-nouveau">+ Nouveau client</button>
+    <button class="btn" id="btn-deconnexion">Déconnexion</button>
+  </header>
+
+  <main>
+    <div class="carte">
+      <h2>Clients &amp; licences <span class="compte" id="compte-licences"></span></h2>
+      <div id="zone-licences"></div>
+    </div>
+
+    <div class="carte">
+      <h2>Synchronisation entre appareils <span class="compte" id="compte-sync"></span></h2>
+      <p class="muted" style="font-size:12px;margin:-6px 0 12px">Uniquement les clients qui utilisent la synchronisation multi-appareils (facultative). Un client mono-appareil n'apparaît qu'au-dessus.</p>
+      <div id="zone-sync"></div>
+    </div>
+  </main>
+</div>
+
+<div class="overlay" id="overlay-fiche" hidden>
+  <div class="modal">
+    <h3 id="titre-fiche">Nouveau client</h3>
+    <p class="muted" style="font-size:12px;margin:2px 0 0" id="sous-titre-fiche"></p>
+    <label>Nom du client *</label>
+    <input id="f-client_nom">
+    <div class="grid2">
+      <div><label>Contact (nom)</label><input id="f-contact_nom"></div>
+      <div><label>Téléphone</label><input id="f-contact_telephone"></div>
+    </div>
+    <label>E-mail</label>
+    <input id="f-contact_email">
+    <label>Adresse</label>
+    <input id="f-adresse">
+    <div class="grid2">
+      <div><label>Formule</label><input id="f-formule" placeholder="ex : Mise en route + abonnement"></div>
+      <div><label>Montant (€)</label><input id="f-montant" type="number" step="0.01"></div>
+    </div>
+    <label>Date d'expiration</label>
+    <input id="f-date_expiration" type="date">
+    <label>Notes</label>
+    <textarea id="f-notes"></textarea>
+    <div class="erreur" id="erreur-fiche" hidden></div>
+    <div class="code-genere" id="code-genere" hidden></div>
+    <div class="modal-actions">
+      <button class="btn" id="btn-annuler-fiche">Fermer</button>
+      <button class="btn primaire" id="btn-valider-fiche">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const OFFRES = {
+  plus: { nom: 'SSIAPilot+', url: 'https://vkrxradosdejnbpvjmat.supabase.co', cle: 'sb_publishable_lYnr0pggpUY1WWUlTmYsCA_RAW4LfSP' },
+  lite: { nom: 'SSIAPilot Lite', url: 'https://sngxgskwrvzlzjcngwsm.supabase.co', cle: 'sb_publishable_UxVx47IleB3OTSCTTQh4EQ_sCUUvCG1' },
+};
+
+let offre = 'plus';
+let sb = null;
+let codeEnEdition = null; // code de la licence en cours de modification, ou null = création
+
+function creerClientSupabase(o){
+  return supabase.createClient(OFFRES[o].url, OFFRES[o].cle, { auth: { persistSession: true, storageKey: 'sb-dashboard-' + o } });
+}
+
+function majBoutonsOffre(){
+  document.querySelectorAll('.offres button').forEach(b=>{
+    b.classList.toggle('actif', b.dataset.offre === offre);
+  });
+}
+
+async function choisirOffre(o){
+  offre = o;
+  majBoutonsOffre();
+  sb = creerClientSupabase(o);
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) { afficherApp(); chargerTout(); }
+  else { afficherConnexion(); }
+}
+
+function afficherConnexion(){
+  document.getElementById('connexion').hidden = false;
+  document.getElementById('app').hidden = true;
+}
+function afficherApp(){
+  document.getElementById('connexion').hidden = true;
+  document.getElementById('app').hidden = false;
+}
+
+document.querySelectorAll('.offres button').forEach(b=>{
+  b.addEventListener('click', ()=> choisirOffre(b.dataset.offre));
+});
+
+document.getElementById('btn-connexion').addEventListener('click', async ()=>{
+  const email = document.getElementById('champ-email').value.trim();
+  const mdp = document.getElementById('champ-mdp').value;
+  const erreur = document.getElementById('erreur-connexion');
+  erreur.hidden = true;
+  if (!email || !mdp) { erreur.textContent = 'Saisis ton e-mail et ton mot de passe.'; erreur.hidden = false; return; }
+  const bouton = document.getElementById('btn-connexion');
+  bouton.disabled = true; bouton.textContent = 'Connexion...';
+  const { error } = await sb.auth.signInWithPassword({ email, password: mdp });
+  bouton.disabled = false; bouton.textContent = 'Se connecter';
+  if (error) { erreur.textContent = error.message; erreur.hidden = false; return; }
+  afficherApp();
+  chargerTout();
+});
+
+document.getElementById('btn-deconnexion').addEventListener('click', async ()=>{
+  await sb.auth.signOut();
+  afficherConnexion();
+});
+
+document.getElementById('btn-rafraichir').addEventListener('click', chargerTout);
+
+async function chargerTout(){
+  await Promise.all([chargerLicences(), chargerSync()]);
+}
+
+function joursDepuis(dateIso){
+  if (!dateIso) return Infinity;
+  return (Date.now() - new Date(dateIso).getTime()) / 86400000;
+}
+function formatDate(dateIso){
+  if (!dateIso) return '—';
+  return new Date(dateIso).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+}
+function formatMontant(m){
+  if (m === null || m === undefined) return '—';
+  return Number(m).toLocaleString('fr-FR', { style:'currency', currency:'EUR' });
+}
+function echapper(s){
+  return (s ?? '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+let derniereListeLicences = [];
+
+async function chargerLicences(){
+  const zone = document.getElementById('zone-licences');
+  const { data, error } = await sb.rpc('admin_licences_liste');
+  if (error) {
+    zone.innerHTML = `<div class="erreur">${echapper(error.message)}<br><span class="muted">Vérifie que le script tableau_de_bord.sql a été exécuté sur ce projet et que ton e-mail y est bien configuré comme administrateur.</span></div>`;
+    document.getElementById('compte-licences').textContent = '';
+    return;
+  }
+  derniereListeLicences = data || [];
+  document.getElementById('compte-licences').textContent = `(${data.length})`;
+  if (!data.length) { zone.innerHTML = '<div class="vide">Aucun client pour l\'instant. Clique sur « + Nouveau client ».</div>'; return; }
+
+  const lignes = data.map(l => {
+    const badges = [];
+    if (!l.active) badges.push('<span class="badge crit">Désactivé</span>');
+    else if (!l.appareil_id) badges.push('<span class="badge warn">Non activé</span>');
+    if (l.date_expiration) {
+      const j = joursDepuis(l.date_expiration) * -1;
+      if (j < 0) badges.push('<span class="badge crit">Expiré</span>');
+      else if (j < 30) badges.push('<span class="badge warn">Expire bientôt</span>');
+    }
+    if (l.active && l.appareil_id && joursDepuis(l.derniere_verification) > 20) badges.push('<span class="badge warn">Silencieux</span>');
+
+    return `<tr>
+      <td data-label="Client"><div class="nom">${echapper(l.client_nom)}</div><div class="muted" style="font-size:12px">${echapper(l.contact_nom||'')}${l.contact_nom&&l.contact_telephone?' · ':''}${echapper(l.contact_telephone||'')}</div></td>
+      <td data-label="Code"><code>${echapper(l.code)}</code></td>
+      <td data-label="Formule">${echapper(l.formule||'—')}<div class="muted" style="font-size:12px">${formatMontant(l.montant)}</div></td>
+      <td data-label="Activée le">${formatDate(l.active_le)}</td>
+      <td data-label="Dernier accès">${formatDate(l.derniere_verification)}</td>
+      <td data-label="Expiration">${formatDate(l.date_expiration)}</td>
+      <td data-label="État">${badges.join(' ') || '<span class="badge ok">OK</span>'}</td>
+      <td data-label="Actions"><div class="actions">
+        <button class="btn" data-action="modifier" data-code="${echapper(l.code)}">Modifier</button>
+        <button class="btn" data-action="toggle" data-code="${echapper(l.code)}" data-active="${l.active}">${l.active ? 'Désactiver' : 'Activer'}</button>
+        ${l.appareil_id ? `<button class="btn" data-action="reattribuer" data-code="${echapper(l.code)}">Réattribuer</button>` : ''}
+      </div></td>
+    </tr>`;
+  }).join('');
+
+  zone.innerHTML = `<table><thead><tr>
+    <th>Client</th><th>Code</th><th>Formule</th><th>Activée le</th><th>Dernier accès</th><th>Expiration</th><th>État</th><th>Actions</th>
+  </tr></thead><tbody>${lignes}</tbody></table>`;
+
+  zone.querySelectorAll('[data-action="modifier"]').forEach(b => b.addEventListener('click', () => ouvrirFiche(b.dataset.code)));
+  zone.querySelectorAll('[data-action="toggle"]').forEach(b => b.addEventListener('click', () => basculerActif(b.dataset.code, b.dataset.active === 'true')));
+  zone.querySelectorAll('[data-action="reattribuer"]').forEach(b => b.addEventListener('click', () => reattribuer(b.dataset.code)));
+}
+
+async function chargerSync(){
+  const zone = document.getElementById('zone-sync');
+  const { data, error } = await sb.rpc('admin_sync_etat');
+  if (error) { zone.innerHTML = `<div class="erreur">${echapper(error.message)}</div>`; document.getElementById('compte-sync').textContent=''; return; }
+  document.getElementById('compte-sync').textContent = `(${data.length})`;
+  if (!data.length) { zone.innerHTML = '<div class="vide">Aucun client n\'utilise la synchronisation multi-appareils pour l\'instant.</div>'; return; }
+  const lignes = data.map(o => {
+    const j = joursDepuis(o.derniere_synchro);
+    let badge = '<span class="badge ok">À jour</span>';
+    if (j > 30) badge = '<span class="badge crit">Silencieux</span>';
+    else if (j > 10) badge = '<span class="badge warn">Ralenti</span>';
+    return `<tr>
+      <td data-label="Organisation" class="nom">${echapper(o.organisation_nom)}</td>
+      <td data-label="Appareils">${o.nb_appareils}</td>
+      <td data-label="Lignes synchronisées">${o.nb_lignes}</td>
+      <td data-label="Dernière synchro">${formatDate(o.derniere_synchro)}</td>
+      <td data-label="État">${badge}</td>
+    </tr>`;
+  }).join('');
+  zone.innerHTML = `<table><thead><tr><th>Organisation</th><th>Appareils</th><th>Lignes synchronisées</th><th>Dernière synchro</th><th>État</th></tr></thead><tbody>${lignes}</tbody></table>`;
+}
+
+async function basculerActif(code, actifActuel){
+  const { error } = await sb.rpc('admin_licence_activer', { p_code: code, p_active: !actifActuel });
+  if (error) { alert(error.message); return; }
+  chargerLicences();
+}
+
+async function reattribuer(code){
+  if (!confirm("Libérer l'appareil actuel de ce code ? Il ne fonctionnera plus sur l'ancien appareil ; le même code pourra être saisi sur un nouveau.")) return;
+  const { error } = await sb.rpc('admin_licence_reattribuer', { p_code: code });
+  if (error) { alert(error.message); return; }
+  chargerLicences();
+}
+
+function ouvrirFiche(code){
+  codeEnEdition = code || null;
+  document.getElementById('erreur-fiche').hidden = true;
+  document.getElementById('code-genere').hidden = true;
+  const champs = ['client_nom','contact_nom','contact_telephone','contact_email','adresse','formule','montant','date_expiration','notes'];
+  if (code) {
+    const l = derniereListeLicences.find(x => x.code === code);
+    document.getElementById('titre-fiche').textContent = 'Modifier la fiche';
+    document.getElementById('sous-titre-fiche').textContent = 'Code ' + code;
+    champs.forEach(c => {
+      const el = document.getElementById('f-'+c);
+      let v = l ? l[c] : '';
+      if (c === 'date_expiration' && v) v = v.substring(0,10);
+      el.value = v ?? '';
+    });
+  } else {
+    document.getElementById('titre-fiche').textContent = 'Nouveau client';
+    document.getElementById('sous-titre-fiche').textContent = 'Le code d\'activation est généré automatiquement.';
+    champs.forEach(c => document.getElementById('f-'+c).value = '');
+  }
+  document.getElementById('overlay-fiche').hidden = false;
+}
+
+document.getElementById('btn-nouveau').addEventListener('click', () => ouvrirFiche(null));
+document.getElementById('btn-annuler-fiche').addEventListener('click', () => { document.getElementById('overlay-fiche').hidden = true; chargerLicences(); });
+
+document.getElementById('btn-valider-fiche').addEventListener('click', async () => {
+  const erreur = document.getElementById('erreur-fiche');
+  erreur.hidden = true;
+  const val = id => document.getElementById('f-'+id).value.trim() || null;
+  const clientNom = val('client_nom');
+  if (!clientNom) { erreur.textContent = 'Le nom du client est obligatoire.'; erreur.hidden = false; return; }
+  const montantBrut = document.getElementById('f-montant').value;
+  const params = {
+    p_client_nom: clientNom,
+    p_contact_nom: val('contact_nom'),
+    p_contact_email: val('contact_email'),
+    p_contact_telephone: val('contact_telephone'),
+    p_adresse: val('adresse'),
+    p_notes: val('notes'),
+    p_formule: val('formule'),
+    p_montant: montantBrut ? Number(montantBrut) : null,
+    p_date_expiration: val('date_expiration'),
+  };
+  const bouton = document.getElementById('btn-valider-fiche');
+  bouton.disabled = true;
+  let res;
+  if (codeEnEdition) {
+    res = await sb.rpc('admin_licence_modifier_fiche', { p_code: codeEnEdition, ...params });
+  } else {
+    res = await sb.rpc('admin_licence_creer', params);
+  }
+  bouton.disabled = false;
+  if (res.error) { erreur.textContent = res.error.message; erreur.hidden = false; return; }
+  if (!codeEnEdition && res.data) {
+    document.getElementById('code-genere').hidden = false;
+    document.getElementById('code-genere').textContent = res.data.code;
+    codeEnEdition = res.data.code;
+  } else {
+    document.getElementById('overlay-fiche').hidden = true;
+  }
+  chargerLicences();
+});
+
+document.getElementById('btn-export').addEventListener('click', () => {
+  const entetes = ['client_nom','contact_nom','contact_email','contact_telephone','adresse','formule','montant','code','active','active_le','derniere_verification','date_expiration','notes'];
+  const lignes = [entetes.join(';')];
+  derniereListeLicences.forEach(l => {
+    lignes.push(entetes.map(e => `"${(l[e] ?? '').toString().replace(/"/g,'""')}"`).join(';'));
+  });
+  const blob = new Blob(['﻿' + lignes.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `clients_${offre}_${new Date().toISOString().substring(0,10)}.csv`;
+  a.click();
+});
+
+choisirOffre('plus');
+</script>
+</body>
+</html>
