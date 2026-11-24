@@ -267,6 +267,7 @@ async function chargerLicences(){
       <td data-label="Formule">${echapper(l.formule||'—')}<div class="muted" style="font-size:12px">${formatMontant(l.montant)}</div></td>
       <td data-label="Activée le">${formatDate(l.active_le)}</td>
       <td data-label="Dernier accès">${formatDate(l.derniere_verification)}</td>
+      <td data-label="Version app">${echapper(l.version_app || '—')}</td>
       <td data-label="Expiration">${formatDate(l.date_expiration)}</td>
       <td data-label="État">${badges.join(' ') || '<span class="badge ok">OK</span>'}</td>
       <td data-label="Actions"><div class="actions">
@@ -278,7 +279,7 @@ async function chargerLicences(){
   }).join('');
 
   zone.innerHTML = `<table><thead><tr>
-    <th>Client</th><th>Code</th><th>Formule</th><th>Activée le</th><th>Dernier accès</th><th>Expiration</th><th>État</th><th>Actions</th>
+    <th>Client</th><th>Code</th><th>Formule</th><th>Activée le</th><th>Dernier accès</th><th>Version app</th><th>Expiration</th><th>État</th><th>Actions</th>
   </tr></thead><tbody>${lignes}</tbody></table>`;
 
   zone.querySelectorAll('[data-action="modifier"]').forEach(b => b.addEventListener('click', () => ouvrirFiche(b.dataset.code)));
@@ -386,7 +387,7 @@ document.getElementById('btn-valider-fiche').addEventListener('click', async () 
 });
 
 document.getElementById('btn-export').addEventListener('click', () => {
-  const entetes = ['client_nom','contact_nom','contact_email','contact_telephone','adresse','formule','montant','code','active','active_le','derniere_verification','date_expiration','notes'];
+  const entetes = ['client_nom','contact_nom','contact_email','contact_telephone','adresse','formule','montant','code','active','active_le','derniere_verification','version_app','date_expiration','notes'];
   const lignes = [entetes.join(';')];
   derniereListeLicences.forEach(l => {
     lignes.push(entetes.map(e => `"${(l[e] ?? '').toString().replace(/"/g,'""')}"`).join(';'));
